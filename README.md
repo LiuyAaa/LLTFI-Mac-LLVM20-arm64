@@ -46,7 +46,7 @@ MNIST 端到端故障注入** 的最小集合。所有针对 LLVM 20 / Apple Cla
 | C/C++ 软件故障注入（41 个 FIDL selector） | ✅ 可用 | FIDL-Algorithm.py + `injectfault` |
 | ONNX → MLIR → LLVM IR | ✅ 验证 | `onnx-mlir --EmitLLVMIR` + `mlir-translate` |
 | LLTFI ML 端到端（MNIST bitflip） | ✅ 端到端验证 | `./scripts/run-mnist-demo.sh` |
-| TensorFlow / PyTorch 转换 | ⚠️ 未在本机测试 | 需 `pip install` |
+| TensorFlow SavedModel → ONNX | ✅ 已验证 | 见下方"Python ML 依赖版本" |
 
 ### MNIST 验证结果（bitflip 注入到 `alloca` 指令 #6066）
 
@@ -57,6 +57,22 @@ MNIST 端到端故障注入** 的最小集合。所有针对 LLVM 20 / Apple Cla
 | 63 | 0 | 静默错误（无害） |
 
 未故障运行：`eight.png → 0.998805 概率 = 8 ✓`
+
+### Python ML 依赖版本（仅 TF 路径需要）
+
+默认 `run-mnist-demo.sh` 直接使用仓库内预编译的 `model.onnx`，**不需要任何
+Python ML 框架**。如果要从 SavedModel 重新生成 ONNX，**必须**用以下版本组合
+（在 macOS 上经过验证；详见 [TROUBLESHOOTING.md §D10](docs/TROUBLESHOOTING.md#d10-tf2onnxconvert-macos-mutex-死锁必看)）：
+
+```bash
+pip install "tensorflow==2.15.0" "tf2onnx==1.16.1" "onnx==1.15.0" "protobuf==3.20.3"
+```
+
+为什么不是最新版：
+- TF 2.16+ / protobuf 5.x 触发 macOS Mach-O 弱符号合并 mutex 死锁
+- tf2onnx 1.15.1 在 Conv2D `explicit_paddings=[]` 上崩
+- tf2onnx 1.17+ 要求更新的 protobuf
+- protobuf 4.25.x 与 TF 2.15 不兼容
 
 ---
 

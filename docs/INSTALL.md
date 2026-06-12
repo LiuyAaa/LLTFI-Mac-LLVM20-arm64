@@ -17,13 +17,26 @@
 | CMake | 3.20+ | `cmake --version` |
 | Ninja | 任意 | `ninja --version` |
 | Git | 任意 | `git --version` |
+| json-c | Homebrew 默认 | `brew install json-c` |
 
 ```bash
 xcode-select --install              # 若提示
-brew install cmake ninja python@3.11
+brew install cmake ninja python@3.11 json-c
 ```
 
 > **磁盘空间**：至少 **15 GB**（LLVM 源码 + 构建 + onnx-mlir + LLTFI + 测试数据）
+
+### Python ML 依赖（可选）
+
+`run-mnist-demo.sh` **不需要**任何 Python ML 框架——它使用仓库内预编译的
+`model.onnx`。只有当你想**从 SavedModel 重新训练并生成 ONNX** 时才需要：
+
+```bash
+pip install "tensorflow==2.15.0" "tf2onnx==1.16.1" "onnx==1.15.0" "protobuf==3.20.3"
+```
+
+> **不要用最新版本**：TF 2.16+ / protobuf 5.x 会在 macOS 上触发 Mach-O 弱符号
+> 合并 mutex 死锁（详见 [TROUBLESHOOTING.md §D10](TROUBLESHOOTING.md#d10-tf2onnxconvert-macos-mutex-死锁必看)）。
 
 ---
 

@@ -196,6 +196,140 @@ clang -L${LLTFI}/runtime_lib -L${OM}/Release/lib -L${HOME}/local/lib \
 # -lOMTensorUtils   # ❌ 不要用，会和 cruntime 冲突
 ```
 
+### D7. `onnx-mlir`: Unknown command line argument `--instrument-onnx-ops=ALL`
+
+**症状**：
+```
+onnx-mlir: Unknown command line argument '--instrument-onnx-ops=ALL'.
+  Try: 'onnx-mlir --help'
+onnx-mlir: Did you mean '--instrument-onnx-node=ALL'?
+```
+
+**根因**：上游 LLTFI `sample_programs/.../mnist/compile.sh` 用了旧 onnx-mlir
+的参数名 `--instrument-onnx-ops`。onnx-mlir 后续版本（≥0.5）改名为
+`--instrument-ops`。
+
+**解决**：把 `compile.sh` 第 12 行：
+```bash
+# ❌ 旧
+onnx-mlir --EmitLLVMIR extendedmodel.onnx --instrument-onnx-ops="ALL" --InstrumentBeforeAndAfterOp
+# ✅ 新
+onnx-mlir --EmitLLVMIR extendedmodel.onnx --instrument-ops="ALL" --InstrumentBeforeAndAfterOp
+```
+
+`run-mnist-demo.sh` 用的是 `--EmitLLVMIR extendedmodel.onnx -o ext-model`
+（不显式指定 instrumentation），所以不受影响。
+
+### D8. `clang` 编译 `image.c` 报 `'stdio.h' file not found`
+
+**症状**：
+```
+image.c:10:10: fatal error: 'stdio.h' file not found
+```
+
+**根因**：macOS 上的 Apple Clang 在编译时**不会自动指向 Xcode Command Line Tools
+的 macOS SDK**。需要显式传 `--sysroot` 或 `-isysroot`。
+
+**解决**：在 `compile.sh` 的 clang 命令里加：
+```bash
+clang -S -emit-llvm image.c --sysroot=$(xcrun --show-sdk-path) -o main.ll
+```
+
+或者用 `-isysroot` 加 `-isystem`：
+```bash
+clang -isysroot "$(xcrun --show-sdk-path)" -isystem "$(xcrun --show-sdk-path)/usr/include" \
+  -S -emit-llvm image.c -o main.ll
+```
+
+`run-mnist-demo.sh` 第 77 行已用此模式。
+
+### D9. `OnnxMlirRuntime.h` 或 `json-c/json.h` 找不到
+
+**症状**：
+```
+fatal error: 'OnnxMlirRuntime.h' file not found
+fatal error: 'json-c/json.h' file not found
+```
+
+**根因**：
+- `OnnxMlirRuntime.h` 来自 `onnx-mlir/include/onnx-mlir/Runtime/`，需要
+  `-I${ONNX_MLIR_SRC}/include` 或 `-I${ONNX_MLIR_BUILD}/include`。
+- `json-c/json.h` 在 `json-c` 的 include 目录里（Homebrew 装在
+  `/opt/homebrew/include/json-c/`）。
+
+**解决**：编译时把所有 include 路径都加上：
+```bash
+clang -isysroot "$(xcrun --show-sdk-path)" -isystem "$(xcrun --show-sdk-path)/usr/include" \
+  -S -emit-llvm image.c \
+  -I"${ONNX_MLIR_SRC}/include" -I"${HOME}/local/include" -I/opt/homebrew/include \
+  -o main.ll
+```
+
+如果 `$ONNX_MLIR_SRC` 没设，让 `compile.sh` 回退到仓库内：
+```bash
+: "${ONNX_MLIR_SRC:=$(dirname "$0")/../../../../onnx-mlir}"
+```
+
+### D10. `tf2onnx.convert` macOS mutex 死锁（必看）
+
+**症状**：
+```
+[mutex.cc : 452] RAW: Lock blocking 0x600003824078   @
+```
+然后 tf2onnx 永远卡住不退出。
+
+**根因**：macOS Mach-O 格式的**弱符号全局合并**问题。TF 2.16+ 和新版 tf2onnx
+依赖不同版本的 protobuf（5.x vs 4.x），多个 lib 共享同一个 Protobuf `ShutdownData`
+单例，但一个用 `absl::Mutex` 锁，一个用 `std::mutex` 锁——对同一个对象加不同
+语义的锁 → **死锁**。
+
+详细分析见 <https://blog.inoki.cc/2026/03/09/protobuf-macos-mutex-lockdown/>。
+
+**解决**：固定一组**已知能在 macOS 上同时工作**的版本：
+```bash
+pip install "tensorflow==2.15.0" "tf2onnx==1.16.1" "onnx==1.15.0" "protobuf==3.20.3"
+```
+
+| 包 | 版本 | 原因 |
+|----|------|------|
+| tensorflow | 2.15.0 | 最后一个稳定支持 macOS 的 TF 2.x（用 `tensorflow-macos` 后端） |
+| tf2onnx | 1.16.1 | 修复了 Conv2D `explicit_paddings=[]` 空列表的 bug；1.15.1 触发 `ValueError` |
+| onnx | 1.15.0 | 与 tf2onnx 1.16.1 + protobuf 3.20.3 兼容 |
+| protobuf | 3.20.3 | 唯一同时满足 TF 2.15 (`>=3.20.3,<5.0`) 和 tf2onnx 1.16.x (`~=3.20.2`) 的版本 |
+
+**如果你不需要 TensorFlow 路径**：直接用 `run-mnist-demo.sh`，它使用预编译
+的 `model.onnx`，**不依赖**任何 Python ML 框架，完全避开此问题。
+
+### D11. `tf2onnx.convert` Conv2D `explicit_paddings` 报错
+
+**症状**（mutex 修了之后才出现）：
+```
+ValueError: Could not infer attribute `explicit_paddings` type from empty iterator
+```
+
+**根因**：TF 2.15 导出的 graph 给 `Conv2D` 节点带 `explicit_paddings=[]`（空
+list），tf2onnx 1.15.1 不能推断空迭代器的类型。
+
+**解决**：升 tf2onnx 到 1.16.1（见 D10 的版本组合）。
+
+### D12. `model.save(filepath)` 不再支持 `.tf` 扩展名
+
+**症状**（Keras 3 / TF 2.15+）：
+```
+ValueError: Invalid filepath extension for saving. Please add either a `.keras`
+extension for the native Keras format (recommended) or a `.h5` extension.
+```
+
+**根因**：新版 Keras 不再支持 `.tf` 扩展名保存 SavedModel。
+
+**解决**：把 `mnist-cnn.py` 里的：
+```python
+# ❌ 旧
+model.save(filepath)   # filepath 以 .tf 结尾
+# ✅ 新
+model.export(filepath) # 用 export() 显式导出 SavedModel
+```
+
 ---
 
 ## E. 性能 / 资源
@@ -238,7 +372,11 @@ ninja onnx-mlir -j6
 
 | 问题 | 状态 | 影响 |
 |------|------|------|
-| TensorFlow / PyTorch 转换 | 未测试 | 需 `pip install`，LLTFI 提供的脚本应当能跑通 |
+| TF 路径 Python 包版本兼容性 | ✅ 已解决（D10/D11） | 用 TF 2.15 + tf2onnx 1.16.1 + onnx 1.15.0 + protobuf 3.20.3 |
+| onnx-mlir `--instrument-onnx-ops` 参数名 | ✅ 已解决（D7） | 改用 `--instrument-ops` |
+| 上游 `compile.sh` 在 macOS 上跑不通 | ✅ 已解决（D8/D9） | 加 sysroot 和 include 路径 |
+| mnist-cnn.py 保存 `.tf` 失败 | ✅ 已解决（D12） | `model.save` → `model.export` |
 | onnx-mlir StableHLO 路径 | 未启用 | 默认 ONNX_MLIR_ENABLE_STABLEHLO=OFF |
 | `-DLLVM_ENABLE_ASSERTIONS=ON` | 未启用 | 调试时建议开，重编 MLIRIR |
 | 交叉编译到 x86_64 | 未实现 | 苹果 Rosetta 即可，但 ML 算子会变慢 |
+| 训练脚本与编译脚本耦合 | ✅ 已解决 | 上游 `compile.sh` 拆成 `train.sh` + `compile.sh` |
