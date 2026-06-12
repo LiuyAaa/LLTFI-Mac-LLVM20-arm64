@@ -1,0 +1,82 @@
+From: LLTFI-Mac-LLVM20-arm64
+Subject: [PATCH] onnx-mlir: LLVM 20.1.0 API compatibility
+
+The official LLTFI fork of onnx-mlir (DependableSystemsLab/onnx-mlir-lltfi
+@ b6996967d4) targets LLVM 19. Building it against LLVM 20.1.0 requires
+three categories of small changes.
+
+1. `FloatType::getF*(ctx)` was removed; MLIR 20 uses the concrete
+   `Float{16,32,64,BF16}Type::get(ctx)` classes directly. Replace all
+   call sites (11 source files) with `sed`.
+
+   Affected files (representative):
+     - src/Dialect/ONNX/ONNXOps/OpHelper.cpp
+     - src/Dialect/ONNX/ONNXOps/Tensor/Slice.cpp
+     - src/Dialect/ONNX/ONNXOps/Contrib.cpp
+     - src/Dialect/ONNX/ONNXOps/ML/Qlinear*.cpp
+     - src/Conversion/ONNXToKrnl/Math/Clip.cpp
+     - src/Conversion/ONNXToKrnl/Math/Elementwise.cpp
+     - src/Conversion/ONNXToKrnl/ML/RandomNormalLike.cpp
+     - src/Conversion/ONNXToKrnl/Tensor/Expand.cpp
+     - src/Conversion/ONNXToKrnl/Tensor/Range.cpp
+     - src/Conversion/SimplifyShapeRelatedOps.cpp
+     - src/Dialect/Mlir/VectorBuilder.cpp
+
+   Pattern:
+     `FloatType::getF16(ctx)`  -> `Float16Type::get(ctx)`
+     `FloatType::getF32(ctx)`  -> `Float32Type::get(ctx)`
+     `FloatType::getF64(ctx)`  -> `Float64Type::get(ctx)`
+     `FloatType::getBF16(ctx)` -> `BFloat16Type::get(ctx)`
+
+2. `getStridesAndOffset(t, strides, offset)` is no longer a free function.
+   Call it as a method on the type. 2 affected files.
+
+   - src/Conversion/ONNXToKrnl/ML/CategoryMapper.cpp
+   - src/Conversion/KrnlToLLVM/KrnlVectorTypeCast.cpp
+
+3. MLIR 20's TOSA dialect changed the `MulOp` `shift` operand from `int`
+   to `Value`, and onnx-mlir's `ONNXToTOSA` branch was not updated.
+   Temporarily disable the TOSA conversion (StableHLO path remains).
+
+   - src/Conversion/CMakeLists.txt: comment out `add_subdirectory(ONNXToTOSA)`
+
+---
+diff --git a/src/Conversion/CMakeLists.txt b/src/Conversion/CMakeLists.txt
+--- a/src/Conversion/CMakeLists.txt
++++ b/src/Conversion/CMakeLists.txt
+@@ -5,7 +5,7 @@
+ add_subdirectory(KrnlToAffine)
+ add_subdirectory(KrnlSeqToMemref)
+-add_subdirectory(ONNXToTOSA)
++# add_subdirectory(ONNXToTOSA)  # Disabled: TOSA API mismatch with MLIR 20.1.0
+
+ if (ONNX_MLIR_ENABLE_STABLEHLO)
+   add_subdirectory(ONNXToStablehlo)
+diff --git a/src/Conversion/KrnlToLLVM/KrnlVectorTypeCast.cpp b/src/Conversion/KrnlToLLVM/KrnlVectorTypeCast.cpp
+--- a/src/Conversion/KrnlToLLVM/KrnlVectorTypeCast.cpp
++++ b/src/Conversion/KrnlToLLVM/KrnlVectorTypeCast.cpp
+@@ -78,7 +78,7 @@
+     int64_t offset;
+     SmallVector<int64_t, 4> strides;
+-    if (failed(getStridesAndOffset(targetType, strides, offset)))
++    if (failed(targetType.getStridesAndOffset(strides, offset)))
+       return failure();
+
+     // Unhandled dynamic offset.
+diff --git a/src/Conversion/ONNXToKrnl/ML/CategoryMapper.cpp b/src/Conversion/ONNXToKrnl/ML/CategoryMapper.cpp
+--- a/src/Conversion/ONNXToKrnl/ML/CategoryMapper.cpp
++++ b/src/Conversion/ONNXToKrnl/ML/CategoryMapper.cpp
+@@ -281,7 +281,7 @@
+             SmallVector<int64_t, 4> offsets(shape.size(), 0);
+             SmallVector<int64_t, 4> strides;
+             int64_t alignmentOffset; // not used
+-            if (getStridesAndOffset(memRefType, strides, alignmentOffset).failed())
++            if (memRefType.getStridesAndOffset(strides, alignmentOffset).failed())
+               llvm_unreachable("Failed to get strides");
+
+NOTE: the Float*Type API replacement covers 11 source files and is best
+applied with a recursive `sed -i` rather than as a literal patch diff
+(individual hunk context varies). See scripts/build-onnx-mlir.sh for the
+exact command.
+--
+2.39.0

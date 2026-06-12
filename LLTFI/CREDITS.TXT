@@ -1,0 +1,58 @@
+This file is a list of people who have contributed to the LLFI 
+project.  If you have contributed a patch or made some other contribution to
+LLFI, please submit a patch to this file to add yourself, and it will be 
+done!
+
+The list is formatted to allow easy grepping and
+beautification by scripts.  The fields are: name (N), and description (D).
+
+N: Nithya Narayanamurthy
+D: Java-based GUI for LLFI 
+
+N: Maryam Raiyat
+D: Initiated and implemented software fault injection capability for LLFI, and designed the initial algorithm for FIDL.
+
+N: Anna Thomas
+D: Coding for LLFI - passes and scripts.
+
+N: Karthik Pattabiraman
+D: Provider of initial code and ideas.
+
+N: Qining Lu
+D: Documented README file and examples, add argument-wise injection feature. 
+ 
+N: Jiesheng Wei
+D: Focused on the restructured LLFI. Coded for the passes and modified the scripts.
+
+N: Kevin Cho
+D: Coded for the scripts.
+
+N: Sam Coulter
+D: Coded for the fault propagation tracing functionality, Installer and Install Script. 
+
+N: Justin Li
+D: Experiments to validate the accuracy of LLFI. Ported LLFI to LLVM 3.3 and Python3.
+
+N: Shaden Smith
+D: Added Progress Bar to injector, multiple instruction selector, unified executable (in progress).
+
+N: Kenneth Song
+D: Integrated tracing functionality into GUI, many other changes to the GUI and tracing functionality.
+D: Web front end.
+
+N: Sittipol (Phil) Tribunyatkul
+D: Added Software Fault Injection to the GUI and integrated FIDL into LLFI.
+
+N: Abraham Chan
+D: Added Makefile script to support compilation of entire projects.
+D: Upgraded LLVM from 3.4 to LLVM 12, added initial capability for FI on ML models
+
+N: Behrooz Sangchoolie
+D: Added support for multiple bit fault injections for hardware faults.
+
+N: Udit Kumar Agarwal
+D: Added support for FI in ML applications along with the ability to inject custom fault patterns according to the TPU and GPU HW models.
+
+N: Anushree Bannadabhavi
+D: Added support for FI in NLP applications along with post processing scripts to study the effect of FI in the generated text output
+D: Improved documentation and autoinstaller, Added docker support to enable ease of LLTFI installation

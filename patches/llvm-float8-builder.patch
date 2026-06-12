@@ -1,0 +1,50 @@
+From: LLTFI-Mac-LLVM20-arm64
+Subject: [PATCH] Add missing Float8 Builder methods for MLIR 20.1.0
+
+MLIR 20.1.0 introduces Float8 type kinds (Float8E4M3FN, Float8E4M3FNUZ,
+Float8E5M2, Float8E5M2FNUZ) but the upstream commit did not add the
+corresponding `Builder::getFloat8*Type()` convenience methods. Several
+ONNX / MLIR consumers (notably onnx-mlir's BType.cpp and OpHelper.cpp)
+call these methods.
+
+This patch adds the four missing methods. They are pure thin wrappers
+that mirror the existing `getF{16,32,64,80,128}Type()` pattern.
+
+The corresponding `.cpp` file changes are identical in shape.
+
+---
+diff --git a/mlir/include/mlir/IR/Builders.h b/mlir/include/mlir/IR/Builders.h
+--- a/mlir/include/mlir/IR/Builders.h
++++ b/mlir/include/mlir/IR/Builders.h
+@@ -68,6 +68,10 @@
+   FloatType getF32Type();
+   FloatType getF64Type();
+   FloatType getF80Type();
+   FloatType getF128Type();
++  FloatType getFloat8E4M3FNType();
++  FloatType getFloat8E4M3FNUZType();
++  FloatType getFloat8E5M2Type();
++  FloatType getFloat8E5M2FNUZType();
+
+   IndexType getIndexType();
+
+diff --git a/mlir/lib/IR/Builders.cpp b/mlir/lib/IR/Builders.cpp
+--- a/mlir/lib/IR/Builders.cpp
++++ b/mlir/lib/IR/Builders.cpp
+@@ -48,6 +48,14 @@
+
+ FloatType Builder::getF128Type() { return Float128Type::get(context); }
+
++FloatType Builder::getFloat8E4M3FNType() { return Float8E4M3FNType::get(context); }
++
++FloatType Builder::getFloat8E4M3FNUZType() { return Float8E4M3FNUZType::get(context); }
++
++FloatType Builder::getFloat8E5M2Type() { return Float8E5M2Type::get(context); }
++
++FloatType Builder::getFloat8E5M2FNUZType() { return Float8E5M2FNUZType::get(context); }
++
+ IndexType Builder::getIndexType() { return IndexType::get(context); }
+
+ IntegerType Builder::getI1Type() { return IntegerType::get(context, 1); }
+--
+2.39.0

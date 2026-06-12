@@ -1,0 +1,51 @@
+#ifndef INST_TRACE_PASS_H
+#define INST_TRACE_PASS_H
+
+#include "llvm/IR/PassManager.h"
+#include "llvm/Passes/PassBuilder.h"
+#include "llvm/Passes/PassPlugin.h"
+
+using namespace llvm;
+
+namespace llfi {
+
+struct InstTrace : public FunctionPass {
+
+  static char ID;
+
+  InstTrace() : FunctionPass(ID) {}
+
+  bool doInitialization(Module& M) override { return false; }
+
+  bool doFinalization(Module& M) override;
+
+  long fetchLLFIInstructionID(Instruction* targetInst);
+
+  Instruction* getInsertPoint(Instruction* llfiIndexedInst);
+
+  bool runOnFunction(Function& F) override;
+};
+
+struct NewInstTrace : llvm::PassInfoMixin<NewInstTrace> {
+  llvm::PreservedAnalyses run(llvm::Module& M, llvm::ModuleAnalysisManager&) {
+
+    InstTrace tempObj;
+    tempObj.doInitialization(M);
+
+    for (Function& F : M) {
+      tempObj.runOnFunction(F);
+    }
+
+    tempObj.doFinalization(M);
+
+    return PreservedAnalyses::none();
+  }
+
+  // Without isRequired returning true, this pass will be skipped for functions
+  // decorated with the optnone LLVM attribute. Note that clang -O0 decorates
+  // all functions with optnone.
+  static bool isRequired() { return true; }
+};
+} // namespace llfi
+
+#endif // INST_TRACE_PASS_H
