@@ -9,6 +9,21 @@ MNIST 端到端故障注入** 的最小集合。所有针对 LLVM 20 / Apple Cla
 
 ---
 
+## 上游项目
+
+本仓库的所有源码均来自下列上游项目，本仓库**只**做平台适配与构建脚本打包，**不修改算法与论文结论**：
+
+- **LLTFI** (主项目)：<https://github.com/DependableSystemsLab/LLTFI>
+  - 上游最后更新：commit `b6996967d4` (2026-05-10, "Upgrade modified ONNX-MLIR files for LLVM19")
+  - 原作者论文：见 [`LLTFI/PaperLLFI.bib`](LLTFI/PaperLLFI.bib)
+- **onnx-mlir LLTFI fork**：<https://github.com/DependableSystemsLab/onnx-mlir-lltfi/tree/LLTFI>
+  - 上游 onnx-mlir：<https://github.com/onnx/onnx-mlir>
+- **LLVM / MLIR 20.1.0**：<https://github.com/llvm/llvm-project> (tag `llvmorg-20.1.0`)
+
+如要引用本工作，请优先引用上游 LLTFI 论文；本仓库的 patch 与构建脚本以 `docs/PATCHES.md` 描述的范围为限。
+
+---
+
 ## 包含什么
 
 | 目录 | 内容 | 体积 |
@@ -99,7 +114,7 @@ python3 SCRIPTS/llfi_test --all
 
 ## 与上游的差异
 
-| 维度 | 上游 (DependableSystemsLab) | 本仓库 |
+| 维度 | [上游 LLTFI](https://github.com/DependableSystemsLab/LLTFI) | 本仓库 |
 |------|---------------------------|--------|
 | LLVM 版本 | 19 | **20.1.0** |
 | 平台 | Linux (x86_64) | **macOS Apple Silicon (arm64)** |
